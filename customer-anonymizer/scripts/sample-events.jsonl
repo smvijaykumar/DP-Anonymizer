@@ -1,0 +1,2 @@
+{"customerId":"C00001","firstName":"Ana","lastName":"Diaz","email":"ana@example.com","phone":"5550000001","dob":"1984-03-12","gender":"F","zip":"33326","occupation":"nurse","incomeBand":"MID","eventType":"LOGIN","eventTs":"2026-11-12T09:00:00Z"}
+{"customerId":"C00002","firstName":"Ben","lastName":"Lee","email":"ben@example.com","phone":"5550000002","dob":"1979-07-01","gender":"M","zip":"33327","occupation":"engineer","incomeBand":"HIGH","eventType":"PAYMENT","eventTs":"2026-11-12T09:01:00Z"}

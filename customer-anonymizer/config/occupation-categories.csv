@@ -1,0 +1,14 @@
+value,category
+nurse,HEALTHCARE
+physician,HEALTHCARE
+pharmacist,HEALTHCARE
+teacher,EDUCATION
+professor,EDUCATION
+software engineer,TECHNICAL
+engineer,TECHNICAL
+accountant,FINANCE
+analyst,FINANCE
+driver,TRANSPORT
+pilot,TRANSPORT
+chef,HOSPITALITY
+retail associate,RETAIL

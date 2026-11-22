@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: data-privacy
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: anonymizer
+  namespace: data-privacy
+  annotations:
+    # IRSA role with: secretsmanager:GetSecretValue on the HMAC secret, read on the snapshot,
+    # read/write on the anonymizer buckets. No access to any other prefix.
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/anonymizer-prod
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: anonymizer-spark
+  namespace: data-privacy
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "persistentvolumeclaims"]
+    verbs: ["create", "get", "list", "watch", "delete", "deletecollection"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: anonymizer-spark
+  namespace: data-privacy
+subjects:
+  - kind: ServiceAccount
+    name: anonymizer
+    namespace: data-privacy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: anonymizer-spark
+---
+# Egress only to Kafka, S3 endpoints and Secrets Manager; adjust CIDRs to your environment.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: anonymizer-egress
+  namespace: data-privacy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: customer-anonymizer
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - ipBlock: { cidr: 10.0.0.0/8 }

@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Customer Anonymizer Demo</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1b1f24; --muted: #5f6b7a; --line: #e2e6eb;
+    --accent: #2f6fdf; --accent-ink: #ffffff; --ok: #1f8a4c; --ok-bg: #e5f5ec; --warn: #a96500; --warn-bg: #fdf1dc;
+    --bad: #c23934; --bad-bg: #fbe7e6; --pend: #5f6b7a; --pend-bg: #eef0f3; --pii: #8a3ab9; --pii-bg: #f4eafa;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151a; --panel: #1a1f26; --ink: #e6e9ee; --muted: #98a3b3; --line: #2b323c;
+      --accent: #5b8ff0; --ok: #4cc382; --ok-bg: #173325; --warn: #e3a541; --warn-bg: #3a2c12;
+      --bad: #ef6b65; --bad-bg: #3b1b1a; --pend: #98a3b3; --pend-bg: #252b34; --pii: #c58af0; --pii-bg: #2e1f3b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151a; --panel: #1a1f26; --ink: #e6e9ee; --muted: #98a3b3; --line: #2b323c;
+    --accent: #5b8ff0; --ok: #4cc382; --ok-bg: #173325; --warn: #e3a541; --warn-bg: #3a2c12;
+    --bad: #ef6b65; --bad-bg: #3b1b1a; --pend: #98a3b3; --pend-bg: #252b34; --pii: #c58af0; --pii-bg: #2e1f3b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 20px 24px 8px; max-width: 1400px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 14px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .sub { color: var(--muted); margin: 0; }
+  main { max-width: 1400px; margin: 0 auto; padding: 8px 24px 40px; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 360px; }
+  @media (max-width: 1100px) { main { grid-template-columns: minmax(0, 1fr); } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+  .stack { display: grid; gap: 16px; align-content: start; min-width: 0; }
+  .flow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 14px 0 4px; }
+  .stage { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 6px 10px; }
+  .stage b { display: block; font-size: 12px; }
+  .stage span { font-size: 12px; color: var(--muted); }
+  .stage.ok { border-color: var(--ok); } .stage.bad { border-color: var(--bad); } .stage.wait { border-style: dashed; }
+  .arrow { color: var(--muted); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 7px; padding: 6px 12px; cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: progress; }
+  .hint { color: var(--muted); font-size: 12px; }
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th { text-align: left; font-weight: 600; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.mono, .mono { font-family: var(--mono); font-size: 12px; }
+  .pii { color: var(--pii); }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .b-anonymized { background: var(--ok-bg); color: var(--ok); }
+  .b-quarantined { background: var(--warn-bg); color: var(--warn); }
+  .b-dlq { background: var(--bad-bg); color: var(--bad); }
+  .b-pending { background: var(--pend-bg); color: var(--pend); }
+  .ev td.before { background: color-mix(in srgb, var(--pii-bg) 45%, transparent); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  .meter { height: 8px; background: var(--pend-bg); border-radius: 99px; overflow: hidden; margin: 4px 0 2px; }
+  .meter > i { display: block; height: 100%; background: var(--ok); }
+  .meter.over > i { background: var(--bad); }
+  .bars { display: grid; gap: 4px; }
+  .bar { display: grid; grid-template-columns: 64px 1fr 40px; gap: 8px; align-items: center; font-size: 12px; }
+  .bar .fill { height: 12px; background: var(--accent); border-radius: 3px; min-width: 2px; }
+  .bar .n { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+  .stat { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 11.5px; color: var(--muted); }
+  .empty { color: var(--muted); font-style: italic; padding: 8px 0; }
+  .err { color: var(--bad); }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  pre { white-space: pre-wrap; word-break: break-all; font-family: var(--mono); font-size: 11.5px; margin: 6px 0 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Customer Anonymizer · live demo</h1>
+  <p class="sub">Kafka events → HMAC tokenization → join with a k-anonymous, l-diverse ARX profile → committed Parquet partitions. All data is synthetic.</p>
+  <div class="flow" id="flow"></div>
+</header>
+<main>
+  <section class="stack">
+    <div class="panel">
+      <h2>Send events to Kafka</h2>
+      <div class="actions">
+        <button class="primary" data-kind="mixed" data-n="30">Send mixed batch (30)</button>
+        <button data-kind="good" data-n="20">20 known customers</button>
+        <button data-kind="unknown" data-n="5">5 unknown customers</button>
+        <button data-kind="bad" data-n="5">5 bad messages</button>
+        <span class="hint" id="sendStatus"></span>
+      </div>
+      <div class="hint" id="triggerHint"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Before → after, per event</h2>
+      <p class="hint" style="margin-top:-4px">Left: the raw Kafka message (purple fields are identifiers, never written out). Right: the row the pipeline committed. Newest first.</p>
+      <div class="table-wrap"><table>
+        <thead><tr>
+          <th>Status</th><th>Customer (raw)</th><th>DOB</th><th>Sex</th><th>ZIP</th><th>Occupation</th><th>Income</th><th>Event</th>
+          <th>→ Token</th><th>dob_gen</th><th>sex</th><th>zip_gen</th><th>occupation_gen</th><th>income</th>
+        </tr></thead>
+        <tbody id="events"></tbody>
+      </table></div>
+    </div>
+
+    <div class="panel">
+      <h2>Committed output partitions</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Partition</th><th>Batch</th><th>Records</th><th>Suppressed</th><th>Profile</th><th>Committed</th><th>Files</th></tr></thead>
+        <tbody id="partitions"></tbody>
+      </table></div>
+    </div>
+
+    <div class="panel">
+      <h2>Audit log</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Type</th><th>Status</th><th>Release</th><th>Out</th><th>Quarantined</th><th>DLQ</th><th>Suppressed</th><th>At</th></tr></thead>
+        <tbody id="audit"></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <aside class="stack">
+    <div class="panel">
+      <h2>Stream job metrics</h2>
+      <div id="metrics"></div>
+    </div>
+    <div class="panel">
+      <h2>Profile &amp; risk gate</h2>
+      <div id="profile"></div>
+    </div>
+    <div class="panel">
+      <h2>Equivalence classes</h2>
+      <div id="classes"></div>
+    </div>
+    <div class="panel">
+      <h2>Dead-letter topic</h2>
+      <div id="dlq"></div>
+    </div>
+  </aside>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const num = (v) => (v == null ? "–" : Number(v).toLocaleString());
+const time = (iso) => (iso ? new Date(iso).toLocaleTimeString() : "–");
+
+function stage(name, detail, cls) {
+  return `<div class="stage ${cls}"><b>${esc(name)}</b><span>${esc(detail)}</span></div>`;
+}
+
+function renderFlow(s) {
+  const m = s.profile.manifest, met = s.metrics;
+  const parts = [
+    stage("Kafka", `${num(s.topics.sourceTotal)} msgs in ${s.topics.source}`, "ok"),
+    stage("Snapshot", s.snapshot.customers ? `${num(s.snapshot.customers)} customers` : "generating…", s.snapshot.customers ? "ok" : "wait"),
+    stage("Profile job (ARX)", m ? `v${m.version} · k=${m.k} l=${m.l}` : "waiting…", m ? "ok" : "wait"),
+    stage("Stream job", met ? `running · every ${s.trigger}` : "starting…", met ? "ok" : "wait"),
+    stage("Output", `${num(s.outputRows)} rows · ${num(s.quarantineRows)} quarantined`, s.outputRows ? "ok" : "wait"),
+  ];
+  $("flow").innerHTML = parts.join('<span class="arrow">→</span>');
+  $("triggerHint").textContent = `The stream job runs a micro-batch every ${s.trigger}; new events show "pending" until then. Unknown customers go to quarantine, bad messages to the DLQ with a reason code only.`;
+}
+
+function renderEvents(s) {
+  if (!s.events.length) { $("events").innerHTML = `<tr><td colspan="14" class="empty">No events yet.</td></tr>`; return; }
+  $("events").innerHTML = s.events.map((e) => {
+    const p = e.parsed || {}, r = e.result || {};
+    const label = e.status === "dlq" ? `DLQ · ${e.reason}` : e.status;
+    const who = e.parsed
+      ? `<span class="pii">${esc(p.customerId ?? "(no id)")}</span><br><span class="pii hint">${esc([p.firstName, p.lastName].join(" "))}</span>`
+      : `<span class="mono hint" title="${esc(e.raw)}">${esc(e.raw.slice(0, 28))}…</span>`;
+    const tok = r.customer_token ? `<span class="mono" title="${esc(r.customer_token)}">${esc(r.customer_token.slice(0, 10))}…</span>` : "";
+    const after = e.status === "anonymized"
+      ? `<td>${tok}</td><td>${esc(r.dob_gen)}</td><td>${esc(r.gender_gen)}</td><td>${esc(r.zip_gen)}</td><td>${esc(r.occupation_gen)}</td><td>${esc(r.incomeBand)}${r.suppressed ? ' <span class="badge b-quarantined">suppressed</span>' : ""}</td>`
+      : e.status === "quarantined"
+        ? `<td>${tok}</td><td colspan="5" class="hint">No profile for this token: kept with token + insensitive fields only</td>`
+        : e.status === "dlq"
+          ? `<td colspan="6" class="hint">Only the reason code and Kafka offset ${e.partition}:${e.offset} were published</td>`
+          : `<td colspan="6" class="hint">Waiting for the next micro-batch…</td>`;
+    return `<tr class="ev">
+      <td><span class="badge b-${e.status}">${esc(label)}</span></td>
+      <td class="before">${who}</td>
+      <td class="before">${esc(p.dob)}</td><td class="before">${esc(p.gender)}</td><td class="before">${esc(p.zip)}</td>
+      <td class="before">${esc(p.occupation)}</td><td class="before">${esc(p.incomeBand)}</td><td>${esc(p.eventType)}</td>
+      ${after}</tr>`;
+  }).join("");
+}
+
+function renderMetrics(s) {
+  const m = s.metrics;
+  if (!m) { $("metrics").innerHTML = `<p class="empty">Stream job not reachable yet (Spark is starting).</p>`; return; }
+  const reasons = Object.entries(m.dlqByReason || {}).map(([k, v]) => `<dt>&nbsp;&nbsp;${esc(k)}</dt><dd>${num(v)}</dd>`).join("");
+  $("metrics").innerHTML = `<dl class="kv">
+    <dt>Records in</dt><dd>${num(m.anon_records_in_total)}</dd>
+    <dt>Anonymized out</dt><dd>${num(m.anon_records_out_total)}</dd>
+    <dt>Quarantined</dt><dd>${num(m.anon_records_quarantined_total)}</dd>
+    <dt>Suppressed</dt><dd>${num(m.anon_records_suppressed_total)}</dd>
+    <dt>Dead-lettered</dt><dd>${num(m.anon_records_dlq_total ?? 0)}</dd>${reasons}
+    <dt>Consumer lag</dt><dd>${num(m.anon_consumer_lag)}</dd>
+  </dl>`;
+}
+
+function meter(label, value, max) {
+  const pct = Math.min(100, (value / max) * 100);
+  return `<div style="margin-top:8px"><div class="kv"><dt>${label}</dt><dd>${value.toFixed(4)} / ${max}</dd></div>
+    <div class="meter ${value > max ? "over" : ""}"><i style="width:${pct}%"></i></div></div>`;
+}
+
+function renderProfile(s) {
+  const m = s.profile.manifest;
+  if (!m) { $("profile").innerHTML = `<p class="empty">No profile published yet.</p>`; return; }
+  const levels = Object.entries(m.levels).map(([k, v]) => `${k}:${v}`).join(" · ");
+  $("profile").innerHTML = `<dl class="kv">
+      <dt>Version</dt><dd class="mono">${esc(m.version)}</dd>
+      <dt>Versions published</dt><dd>${m.allVersions.length}</dd>
+      <dt>Key version</dt><dd>${esc(m.keyVersion)}</dd>
+      <dt>k / l</dt><dd>${m.k} / ${m.l}</dd>
+      <dt>Customers</dt><dd>${num(m.recordCount)}</dd>
+      <dt>Suppressed</dt><dd>${num(m.suppressedCount)} (limit ${(m.suppressionLimit * 100).toFixed(0)}%)</dd>
+      <dt>Levels</dt><dd class="mono">${esc(levels)}</dd>
+      <dt>Reused previous levels</dt><dd>${m.pinnedLevels ? "yes" : "no"}</dd>
+    </dl>
+    ${meter("Highest prosecutor risk", m.highestProsecutorRisk, m.maxProsecutorRisk ?? 0.1)}
+    ${meter("Average prosecutor risk", m.averageProsecutorRisk, m.maxAverageRisk ?? 0.05)}`;
+}
+
+function renderClasses(s) {
+  const st = s.profile.stats;
+  if (!st) { $("classes").innerHTML = `<p class="empty">Waiting for the profile.</p>`; return; }
+  const max = Math.max(...st.histogram.map((h) => h.count), 1);
+  const rows = (list) => list.map((c) => `<tr><td class="mono">${esc(Object.values(c.values).join(" · "))}</td><td>${c.size}</td><td>${c.distinctIncome}</td></tr>`).join("");
+  $("classes").innerHTML = `
+    <div class="stats">
+      <div class="stat"><b>${num(st.classes)}</b><span>classes</span></div>
+      <div class="stat"><b>${st.minSize}</b><span>smallest (≥ k)</span></div>
+      <div class="stat"><b>${st.medianSize}</b><span>median</span></div>
+      <div class="stat"><b>${st.minDistinctSensitive}</b><span>min distinct income (≥ l)</span></div>
+    </div>
+    <div class="hint" style="margin-bottom:6px">Customers per class (identical generalized dob · sex · zip · occupation)</div>
+    <div class="bars">${st.histogram.map((h) => `<div class="bar"><span>${h.label}</span><div class="fill" style="width:${(h.count / max) * 100}%"></div><span class="n">${h.count}</span></div>`).join("")}</div>
+    <details style="margin-top:10px"><summary>Smallest classes</summary>
+      <table><thead><tr><th>dob · sex · zip · occupation</th><th>size</th><th>incomes</th></tr></thead><tbody>${rows(st.smallest)}</tbody></table></details>`;
+}
+
+function renderPartitions(s) {
+  $("partitions").innerHTML = s.partitions.length
+    ? s.partitions.map((p) => `<tr><td class="mono">${esc(p.partition)}</td><td>b${p.batchId}</td><td>${num(p.recordCount)}</td><td>${num(p.suppressedCount)}</td>
+        <td class="mono">${esc(p.profileVersion)}</td><td>${time(p.committedAt)}</td><td>${p.files.length}</td></tr>`).join("")
+    : `<tr><td colspan="7" class="empty">No committed batches yet.</td></tr>`;
+}
+
+function renderAudit(s) {
+  $("audit").innerHTML = s.audit.length
+    ? s.audit.map((a) => `<tr><td>${esc(a.releaseType)}</td><td><span class="badge ${a.status === "REJECTED_RISK" ? "b-dlq" : "b-anonymized"}">${esc(a.status)}</span></td>
+        <td class="mono">${esc(a.releaseId)}</td><td>${num(a.recordCount)}</td><td>${num(a.quarantinedCount)}</td><td>${num(a.dlqCount)}</td><td>${num(a.suppressedCount)}</td><td>${time(a.committedAt)}</td></tr>`).join("")
+    : `<tr><td colspan="8" class="empty">No releases yet.</td></tr>`;
+}
+
+function renderDlq(s) {
+  $("dlq").innerHTML = s.dlq.length
+    ? `<p class="hint" style="margin-top:-4px">${num(s.topics.dlqTotal)} messages on ${esc(s.topics.dlq)}. No payload is ever copied here.</p>
+       <table><thead><tr><th>Reason</th><th>Source</th><th>Batch</th></tr></thead><tbody>
+       ${s.dlq.slice(0, 12).map((d) => `<tr><td><span class="badge b-dlq">${esc(d.reason)}</span></td><td class="mono">${d.sourcePartition}:${d.sourceOffset}</td><td>b${d.batchId}</td></tr>`).join("")}
+       </tbody></table>`
+    : `<p class="empty">Nothing dead-lettered yet.</p>`;
+}
+
+async function refresh() {
+  try {
+    const r = await fetch("/api/state");
+    const s = await r.json();
+    if (s.error) throw new Error(s.error);
+    renderFlow(s); renderEvents(s); renderMetrics(s); renderProfile(s); renderClasses(s);
+    renderPartitions(s); renderAudit(s); renderDlq(s);
+  } catch (e) {
+    $("flow").innerHTML = `<span class="err">Viewer backend not reachable: ${esc(e.message)}</span>`;
+  }
+}
+
+document.querySelectorAll("button[data-kind]").forEach((b) => b.addEventListener("click", async () => {
+  b.disabled = true;
+  try {
+    const r = await fetch(`/api/send?kind=${b.dataset.kind}&n=${b.dataset.n}`, { method: "POST" });
+    const j = await r.json();
+    $("sendStatus").textContent = j.error ? `Error: ${j.error}` : `Sent ${j.sent} message(s) at ${new Date().toLocaleTimeString()}`;
+    refresh();
+  } finally { b.disabled = false; }
+}));
+
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

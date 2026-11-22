@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.example.anonymizer</groupId>
+    <artifactId>customer-anonymizer</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>anonymizer-profile-job</artifactId>
+  <name>Anonymizer :: Profile Anonymization Job</name>
+
+  <properties>
+    <main.class>com.example.anonymizer.profile.ProfileAnonymizationJob</main.class>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.example.anonymizer</groupId>
+      <artifactId>anonymizer-common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.deidentifier.arx</groupId>
+      <artifactId>libarx</artifactId>
+    </dependency>
+    <!-- ARX runtime dependencies. We install libarx-<v>-min.jar (ARX classes only) rather than the fat
+         libarx-<v>.jar, which bundles Hadoop, Guava, BouncyCastle and commons-* copies that would shadow
+         Spark's own. commons-math3, commons-lang3 and univocity-parsers come from the Spark runtime. -->
+    <dependency>
+      <groupId>com.carrotsearch</groupId>
+      <artifactId>hppc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>net.objecthunter</groupId>
+      <artifactId>exp4j</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>colt</groupId>
+      <artifactId>colt</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>commons-validator</groupId>
+      <artifactId>commons-validator</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-sql_${scala.binary.version}</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>${project.artifactId}</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

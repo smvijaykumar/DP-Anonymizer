@@ -1,0 +1,112 @@
+# One-click demo: ./demo.sh  (or: docker compose up --build, then open http://localhost:8080)
+#
+#   kafka ─► kafka-init (creates topics)
+#   snapshot (synthetic customers) ─► profile-job (ARX) ─► stream-job ─► /data/output
+#   viewer (UI, sends events) :8080
+#
+# Long-running services depend only on a healthy Kafka and wait for their inputs themselves
+# (stream-job for a published profile, viewer for the snapshot and topics). Podman cannot start a
+# container that depends on an already-exited one, so this keeps the demo working on both engines.
+#
+# Kafka only, for running the jobs from your IDE as in the README:  docker compose up kafka
+name: customer-anonymizer
+
+x-anonymizer: &anonymizer
+  image: customer-anonymizer:demo
+  pull_policy: never   # built locally by the snapshot service
+  volumes:
+    - demo-data:/data
+  environment: &anonymizer-env
+    # DEMO-ONLY key so the profile job, stream job and viewer agree on tokens. Never reuse it.
+    ANON_HMAC_KEY_V1: ${ANON_HMAC_KEY_V1:-c/xVApdQPwy9RT/dpxc9GULnI0bxIEgwTTnrqUtooZo=}
+    DEMO_TRIGGER: ${DEMO_TRIGGER:-15 seconds}
+
+services:
+  kafka:
+    image: apache/kafka:3.7.0
+    hostname: kafka
+    ports:
+      - "9092:9092"   # host access (localhost:9092); containers use kafka:19092
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:19092,HOST://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"   # kafka-init creates them with the right partitions
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:19092 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 10s
+
+  kafka-init:
+    image: apache/kafka:3.7.0
+    depends_on:
+      kafka: { condition: service_healthy }
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        for t in customer-events:3 customer-events-dlq:1; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists \
+            --topic "$${t%%:*}" --partitions "$${t##*:}" --replication-factor 1
+        done
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --list
+    restart: "no"
+
+  snapshot:
+    <<: *anonymizer
+    build: .
+    pull_policy: build
+    command: ["/opt/anonymizer/demo/run.sh", "snapshot"]
+    environment:
+      <<: *anonymizer-env
+      CUSTOMERS: ${DEMO_CUSTOMERS:-20000}
+    restart: "no"
+
+  profile-job:
+    <<: *anonymizer
+    command: ["/opt/anonymizer/demo/run.sh", "profile"]
+    environment:
+      <<: *anonymizer-env
+      DRIVER_MEMORY: 1500m
+    depends_on:
+      snapshot: { condition: service_completed_successfully }
+    restart: "no"
+
+  stream-job:
+    <<: *anonymizer
+    command: ["/opt/anonymizer/demo/run.sh", "stream"]
+    ports:
+      - "9095:9095"   # Prometheus metrics: curl localhost:9095/metrics
+    depends_on:
+      kafka: { condition: service_healthy }
+    restart: unless-stopped
+
+  viewer:
+    build: ./demo/viewer
+    image: customer-anonymizer-viewer:demo
+    ports:
+      - "${DEMO_PORT:-8080}:8080"
+    volumes:
+      - demo-data:/data:ro
+    environment:
+      <<: *anonymizer-env
+      KAFKA_BOOTSTRAP: kafka:19092
+      METRICS_URL: http://stream-job:9095/metrics
+    depends_on:
+      kafka: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  demo-data:

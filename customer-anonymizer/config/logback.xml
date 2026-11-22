@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Structured JSON logs. Code never logs record values or identifiers, only counts, ids of batches,
+     versions and reason codes. Library loggers are held at WARN to keep debug output out of logs. -->
+<configuration>
+  <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+      <customFields>{"service":"customer-anonymizer"}</customFields>
+      <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+        <maxDepthPerThrowable>30</maxDepthPerThrowable>
+        <rootCauseFirst>true</rootCauseFirst>
+      </throwableConverter>
+    </encoder>
+  </appender>
+
+  <logger name="org.apache.spark" level="WARN"/>
+  <logger name="org.apache.kafka" level="WARN"/>
+  <logger name="org.apache.hadoop" level="WARN"/>
+  <logger name="org.apache.parquet" level="WARN"/>
+  <logger name="org.deidentifier.arx" level="WARN"/>
+  <logger name="org.sparkproject" level="WARN"/>
+
+  <root level="INFO">
+    <appender-ref ref="JSON"/>
+  </root>
+</configuration>

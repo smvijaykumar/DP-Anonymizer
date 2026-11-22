@@ -1,0 +1,42 @@
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: ScheduledSparkApplication
+metadata:
+  name: anonymizer-daily-profile
+  namespace: data-privacy
+spec:
+  schedule: "0 2 * * *"          # 02:00 UTC daily, before the business-hours stream peaks
+  concurrencyPolicy: Forbid
+  successfulRunHistoryLimit: 7
+  failedRunHistoryLimit: 14
+  template:
+    type: Java
+    mode: cluster
+    image: registry.example.com/data-privacy/customer-anonymizer:1.0.0
+    imagePullPolicy: IfNotPresent
+    mainClass: com.example.anonymizer.profile.ProfileAnonymizationJob
+    mainApplicationFile: local:///opt/anonymizer/jars/anonymizer-profile-job.jar
+    sparkVersion: "3.5.3"
+    restartPolicy:
+      type: Never              # exit code 2 = risk gate rejected; must be investigated, not retried
+    sparkConf:
+      spark.sql.session.timeZone: "UTC"
+      spark.driver.maxResultSize: "8g"
+      spark.hadoop.fs.s3a.aws.credentials.provider: "com.amazonaws.auth.WebIdentityTokenCredentialsProvider"
+      spark.driver.extraJavaOptions: "-Dconfig.file=/opt/anonymizer/config/prod.conf -Dlogback.configurationFile=/opt/spark/conf/logback.xml -XX:+UseG1GC"
+    driver:
+      cores: 4
+      memory: "48g"              # ARX holds the whole snapshot in the driver JVM; size to your population
+      serviceAccount: anonymizer
+      labels:
+        app: anonymizer-daily-profile
+        app.kubernetes.io/part-of: customer-anonymizer
+      env:
+        - name: ANON_JOB_VERSION
+          value: "1.0.0"
+    executor:
+      instances: 2
+      cores: 2
+      memory: "8g"
+      serviceAccount: anonymizer
+      labels:
+        app.kubernetes.io/part-of: customer-anonymizer
